@@ -8,15 +8,15 @@ import torch
 #from skimage import io, transform
 import numpy as np
 import matplotlib.pyplot as plt
-from torch.utils import data
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+from torchvision.utils import save_image
 from labels import Labels
 
 # Ignore warnings
 import warnings
 
-from torchvision.transforms.transforms import ToTensor
+from torchvision.transforms.transforms import Normalize, ToTensor
 warnings.filterwarnings("ignore")
 plt.ion() # interactive mode
 
@@ -67,7 +67,10 @@ class CustomDataset(Dataset):
         # @NOTE: transofrm all tensors (image and label) to PIL Image
         label = transforms.ToPILImage()(label.squeeze_(0))
         # @NOTE: Denormalize image
-        #image = Denormalize()(image.squeeze_(0))
+        image = Normalize(
+            mean=(-0.485/0.229, -0.456/0.224, -0.406/0.255), 
+            std=(1/0.229, 1/0.224, 1/0.255)
+        )(image.squeeze_(0))
         image = transforms.ToPILImage()(image.squeeze_(0))
         # convert PIL image to numpy array, squeeze additional dimension
         image = np.asarray(image).squeeze()
@@ -82,11 +85,7 @@ class CustomDataset(Dataset):
         axs[1].imshow(Labels.colorize(label))
         axs[1].set_title("Colorized Label")
 
-        # save image
-
-        # save label
-
-        pass
+        # save image and label
 
     @classmethod
     def populate_dataset(cls, root) -> list:
@@ -165,22 +164,22 @@ class CustomNormalize(object):
         # 2. Normalize = Using PyTorch implementation, substract the mean
         # and divides by std
         trans = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(self.mean, self.std)
+            ToTensor(),
+            Normalize(self.mean, self.std)
         ])
         img_trans = trans(image)
         # Transform label from PIL to tensor
-        lbl_trans = transforms.ToTensor()(label)
+        lbl_trans = ToTensor()(label)
         # @NOTE: uncomment following code if Label is not transformed
         # lbl_trans = label 
         return {"image":img_trans, "label":lbl_trans}
 
 
 class Denormalize(object):
-    """Denormalize image"""
+    """Denormalize image using PyTorch Normalization and pre-defined mean and std"""
     def __init__(self, 
         mean=(-0.485/0.229, -0.456/0.224, -0.406/0.255), 
-        std=((1/0.229, 1/0.224, 1/0.255))) -> None:
+        std=(1/0.229, 1/0.224, 1/0.255)) -> None:
         assert isinstance(mean, tuple) and isinstance(std, tuple)
         assert len(mean) == 3 and len(std) == 3
         self.mean = mean
@@ -189,7 +188,8 @@ class Denormalize(object):
     def __call__(self, sample) -> dict:
         """Return denormalized transformed image and corresponding label"""
         image, label = sample["image"], sample["label"]
-        trans = transforms.Normalize(self.mean, self.std)
+        # @NOTE: only denormalize image
+        trans = Normalize(self.mean, self.std)
         img_trans = trans(image)
         return {"image":img_trans, "label":label}
 
