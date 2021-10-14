@@ -8,8 +8,10 @@ import torch
 #from skimage import io, transform
 import numpy as np
 import matplotlib.pyplot as plt
+from torch.utils import data
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
+from labels import Labels
 
 # Ignore warnings
 import warnings
@@ -18,11 +20,11 @@ from torchvision.transforms.transforms import ToTensor
 warnings.filterwarnings("ignore")
 plt.ion() # interactive mode
 
+
 """
 Inherit the proper class from PyTorch module.
 """
 class CustomDataset(Dataset):
-
     def __init__(self, root="dataset", transform=None):
         """Define custom dataset with default location of root dataset folder"""
         # Load the paths to the images and labels into list/arrays in constructor here
@@ -38,7 +40,7 @@ class CustomDataset(Dataset):
         return len(self.images)
 
     def __getitem__(self, index):
-        """To support the indexing such as dataaset[i] in order to get i-th sample"""
+        """To support the indexing such as dataset[i] in order to get i-th sample"""
         if torch.is_tensor(index):
             index = index.tolist()
         # load images
@@ -61,6 +63,29 @@ class CustomDataset(Dataset):
     """
     def shows(self, image, label):
         # Complete the implementation.
+        # transform label from tensor into PIL image, to recover integer value of label
+        # @NOTE: transofrm all tensors (image and label) to PIL Image
+        label = transforms.ToPILImage()(label.squeeze_(0))
+        # @NOTE: Denormalize image
+        #image = Denormalize()(image.squeeze_(0))
+        image = transforms.ToPILImage()(image.squeeze_(0))
+        # convert PIL image to numpy array, squeeze additional dimension
+        image = np.asarray(image).squeeze()
+        # @NOTE: uncomment for loading tensor image
+        #image = np.asarray(image.permute(0, 2, 3, 1)).squeeze()
+        label = np.asarray(label).squeeze()
+        # set subplot size to fixed size
+        _, axs = plt.subplots(2, figsize=(15, 15))
+        # show image and colorized label in one plot 
+        axs[0].imshow(image)
+        axs[0].set_title("Image Data")
+        axs[1].imshow(Labels.colorize(label))
+        axs[1].set_title("Colorized Label")
+
+        # save image
+
+        # save label
+
         pass
 
     @classmethod
@@ -77,13 +102,6 @@ class CustomDataset(Dataset):
             
         return image_list, label_list
 
-
-
-if __name__ == "__main__":
-    # Iterate over through the whole dataset, visualise image and colouful label, and save them to output directory!
-    # Use `DataLoder` class from torch.utils.data module to load your `CustomDataset` class!
-    #                   -> set batch_size to 1!
-    pass
 
 class CustomRandomCrop(object):
     """Random Crop transformation: using PyTorch implementation"""
@@ -111,6 +129,7 @@ class CustomRandomCrop(object):
 
         return {"image":img_trans, "label":lbl_trans}
 
+
 class CustomRandomHorizontalFlip(object):
     """Random Horizontal Flip transformation: using PyTorch implementation"""
     def __init__(self, p=1.0) -> None:
@@ -126,6 +145,7 @@ class CustomRandomHorizontalFlip(object):
         lbl_trans = trans(label)
 
         return {"image":img_trans, "label":lbl_trans}
+
 
 class CustomNormalize(object):
     """Normalization transformation: only transform image, leave label as it was.
@@ -151,43 +171,108 @@ class CustomNormalize(object):
         img_trans = trans(image)
         # Transform label from PIL to tensor
         lbl_trans = transforms.ToTensor()(label)
+        # @NOTE: uncomment following code if Label is not transformed
+        # lbl_trans = label 
         return {"image":img_trans, "label":lbl_trans}
-        
 
-# Create CustomDataset object
-dataset = CustomDataset()
-# show sampled image
-sample_index = 1
-print("image-0", dataset[1]["image"]) # 3 channel image (RGB)
-print("label-0", dataset[1]["label"]) # label only has one channel
-plt.imshow(dataset[sample_index]["image"])
 
-crop = CustomRandomCrop()
-flip = CustomRandomHorizontalFlip()
-norm = CustomNormalize()
-comb = transforms.Compose([
-    crop,
-    flip,
-    norm
-])
-# apply each of the transformation on selected sample
-sample_index = 3
-trans_sample = crop(dataset[sample_index])
-plt.figure()
-plt.imshow(trans_sample["image"])
-plt.figure()
-plt.imshow(trans_sample["label"])
+class Denormalize(object):
+    """Denormalize image"""
+    def __init__(self, 
+        mean=(-0.485/0.229, -0.456/0.224, -0.406/0.255), 
+        std=((1/0.229, 1/0.224, 1/0.255))) -> None:
+        assert isinstance(mean, tuple) and isinstance(std, tuple)
+        assert len(mean) == 3 and len(std) == 3
+        self.mean = mean
+        self.std = std
 
-trans_sample = flip(dataset[sample_index])
-plt.figure()
-plt.imshow(trans_sample["image"])
-plt.figure()
-plt.imshow(trans_sample["label"])
+    def __call__(self, sample) -> dict:
+        """Return denormalized transformed image and corresponding label"""
+        image, label = sample["image"], sample["label"]
+        trans = transforms.Normalize(self.mean, self.std)
+        img_trans = trans(image)
+        return {"image":img_trans, "label":label}
 
-trans_sample = comb(dataset[sample_index])
-plt.figure()
-# Display image from tensor to RGB
-plt.imshow(transforms.ToPILImage()(trans_sample["image"]).convert("RGB"))
-plt.figure()
-plt.imshow(transforms.ToPILImage()(trans_sample["label"]).convert("RGB"))
+
+def show_colored_label(sample):
+    # convert sample to numpy array object
+    sample = np.asarray(sample)
+    colorized_label = Labels.colorize(sample)
+    plt.imshow(colorized_label)
+
+
+def test_script():
+    # Create CustomDataset object
+    dataset = CustomDataset()
+    # show sampled image
+    sample_index = 1
+    print("image-0", dataset[1]["image"]) # 3 channel image (RGB)
+    print("label-0", dataset[1]["label"]) # label only has one channel
+    plt.imshow(dataset[sample_index]["image"])
+
+    crop = CustomRandomCrop()
+    flip = CustomRandomHorizontalFlip()
+    norm = CustomNormalize()
+    comb = transforms.Compose([
+        crop,
+        flip,
+        norm
+    ])
+    # apply each of the transformation on selected sample
+    sample_index = 1
+    trans_sample = crop(dataset[sample_index])
+    plt.figure()
+    plt.imshow(trans_sample["image"])
+    plt.figure()
+    plt.imshow(trans_sample["label"])
+
+    image = np.asarray(trans_sample["image"])
+    label = np.asarray(trans_sample["label"])
+
+    _, axs = plt.subplots(2, figsize=(15, 15))
+    # show image and colorized label in one plot 
+    axs[0].imshow(image)
+    axs[0].set_title("Image Data")
+    axs[1].imshow(Labels.colorize(label))
+    axs[1].set_title("Colorized Label")
+
+    trans_sample = flip(dataset[sample_index])
+    plt.figure()
+    plt.imshow(trans_sample["image"])
+    plt.figure()
+    plt.imshow(trans_sample["label"])
+
+    trans_sample = comb(dataset[sample_index])
+    plt.figure()
+    # Display image from tensor to RGB
+    plt.imshow(transforms.ToPILImage()(trans_sample["image"]).convert("RGB"))
+    plt.figure()
+    #plt.imshow(transforms.ToPILImage()(trans_sample["label"]).convert("RGB"))
+    plt.imshow(trans_sample["label"])
+    print(np.asarray(trans_sample["label"]))
+
+    show_colored_label(trans_sample["label"])
+
+
+if __name__ == "__main__":
+    # Iterate over through the whole dataset, visualise image and colouful label, and save them to output directory!
+    # Use `DataLoder` class from torch.utils.data module to load your `CustomDataset` class!
+    #                   -> set batch_size to 1!
+    
+    # Define dataset transform routine
+    crop = CustomRandomCrop()
+    flip = CustomRandomHorizontalFlip()
+    norm = CustomNormalize()
+    comb = transforms.Compose([
+        crop,
+        flip,
+        norm
+    ])
+    transformed_dataset = CustomDataset(transform=comb)
+    dataloader = DataLoader(transformed_dataset, batch_size=1, shuffle=True)
+
+    # iterate through dataloader
+    for i_batch, sample_batched in enumerate(dataloader):
+        print(i_batch, sample_batched["image"].size(), sample_batched["label"].size())
+        transformed_dataset.shows(sample_batched["image"], sample_batched["label"])
 # %%
