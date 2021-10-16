@@ -13,12 +13,18 @@ from torchvision import transforms
 from torchvision.utils import save_image
 from labels import Labels
 
+# import uuid to generate filename
+from uuid import uuid1
+
 # Ignore warnings
 import warnings
 
 from torchvision.transforms.transforms import Normalize, ToTensor
 warnings.filterwarnings("ignore")
 plt.ion() # interactive mode
+
+# @NOTE: make sure that the directory exist first
+output_dir = "output"
 
 
 """
@@ -62,30 +68,37 @@ class CustomDataset(Dataset):
     You can import it and use the Label class in this method!
     """
     def shows(self, image, label):
-        # Complete the implementation.
-        # transform label from tensor into PIL image, to recover integer value of label
-        # @NOTE: transofrm all tensors (image and label) to PIL Image
-        label = transforms.ToPILImage()(label.squeeze_(0))
-        # @NOTE: Denormalize image
-        image = Normalize(
-            mean=(-0.485/0.229, -0.456/0.224, -0.406/0.255), 
-            std=(1/0.229, 1/0.224, 1/0.255)
-        )(image.squeeze_(0))
-        image = transforms.ToPILImage()(image.squeeze_(0))
-        # convert PIL image to numpy array, squeeze additional dimension
-        image = np.asarray(image).squeeze()
-        # @NOTE: uncomment for loading tensor image
-        #image = np.asarray(image.permute(0, 2, 3, 1)).squeeze()
-        label = np.asarray(label).squeeze()
-        # set subplot size to fixed size
-        _, axs = plt.subplots(2, figsize=(15, 15))
-        # show image and colorized label in one plot 
-        axs[0].imshow(image)
-        axs[0].set_title("Image Data")
-        axs[1].imshow(Labels.colorize(label))
-        axs[1].set_title("Colorized Label")
+        for idx in range(image.shape[0]):
+            # Complete the implementation.
+            # transform label from tensor into PIL image, to recover integer value of label
+            # @NOTE: transofrm all tensors (image and label) to PIL Image
+            #label_ = transforms.ToPILImage()(label[idx])
+            # @NOTE: Denormalize image
+            image_ = Denormalize()(image[idx])
+            image_ = transforms.ToPILImage()(image_)
+            # convert PIL image to numpy array, squeeze additional dimension
+            image_ = np.asarray(image_)
+            # @NOTE: uncomment for loading tensor image
+            #image = np.asarray(image.permute(0, 2, 3, 1)).squeeze()
+            label_ = np.asarray(label[idx])
+            # @NOTE: uncomment when label is PIL image or normalized tensor
+            #label_ = np.asarray(label_)
+            # set subplot size to fixed size
+            _, axs = plt.subplots(2, figsize=(15, 15))
+            # show image and colorized label in one plot 
+            axs[0].imshow(image_)
+            axs[0].set_title("Image Data")
+            label_ = Labels.colorize(label_)
+            axs[1].imshow(label_)
+            axs[1].set_title("Colorized Label")
 
-        # save image and label
+            # save image and label
+            #print(type(image_), image_.shape)
+            #print(type(label_), label_.shape)
+            #print(torch.tensor(label_).shape)
+            fname = uuid1()
+            plt.imsave(arr=image_, fname=os.path.join(output_dir, f"{fname}.png"))
+            plt.imsave(arr=label_, fname=os.path.join(output_dir, f"{fname}_label.png"))
 
     @classmethod
     def populate_dataset(cls, root) -> list:
@@ -168,8 +181,9 @@ class CustomNormalize(object):
             Normalize(self.mean, self.std)
         ])
         img_trans = trans(image)
-        # Transform label from PIL to tensor
-        lbl_trans = ToTensor()(label)
+        # @NOTE: uncoment if you want to transform label from PIL to tensor)
+        # @NOTE: value of label tensor is preserved as it was  
+        lbl_trans = torch.tensor(np.asarray(label))
         # @NOTE: uncomment following code if Label is not transformed
         # lbl_trans = label 
         return {"image":img_trans, "label":lbl_trans}
@@ -178,20 +192,20 @@ class CustomNormalize(object):
 class Denormalize(object):
     """Denormalize image using PyTorch Normalization and pre-defined mean and std"""
     def __init__(self, 
-        mean=(-0.485/0.229, -0.456/0.224, -0.406/0.255), 
-        std=(1/0.229, 1/0.224, 1/0.255)) -> None:
+        mean=(-0.485/0.229, -0.456/0.224, -0.406/0.225), 
+        std=(1/0.229, 1/0.224, 1/0.225)) -> None:
         assert isinstance(mean, tuple) and isinstance(std, tuple)
         assert len(mean) == 3 and len(std) == 3
         self.mean = mean
         self.std = std
 
     def __call__(self, sample) -> dict:
-        """Return denormalized transformed image and corresponding label"""
-        image, label = sample["image"], sample["label"]
+        """Return denormalized transformed image"""
         # @NOTE: only denormalize image
+        # loop to support batch processing
         trans = Normalize(self.mean, self.std)
-        img_trans = trans(image)
-        return {"image":img_trans, "label":label}
+        img_trans = trans(sample)
+        return img_trans
 
 
 def show_colored_label(sample):
@@ -269,7 +283,7 @@ if __name__ == "__main__":
         norm
     ])
     transformed_dataset = CustomDataset(transform=comb)
-    dataloader = DataLoader(transformed_dataset, batch_size=1, shuffle=True)
+    dataloader = DataLoader(transformed_dataset, batch_size=2, shuffle=True)
 
     # iterate through dataloader
     for i_batch, sample_batched in enumerate(dataloader):
