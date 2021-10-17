@@ -5,12 +5,10 @@ import os
 # load PIL image open function as imread
 from PIL.Image import open as imread
 import torch
-#from skimage import io, transform
 import numpy as np
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
-from torchvision.utils import save_image
 from labels import Labels
 
 # import uuid to generate filename
@@ -23,7 +21,7 @@ from torchvision.transforms.transforms import Normalize, ToTensor
 warnings.filterwarnings("ignore")
 plt.ion() # interactive mode
 
-# @NOTE: make sure that the directory exist first
+# @NOTE: make sure that the output directory exist first
 output_dir = "output"
 
 
@@ -58,6 +56,7 @@ class CustomDataset(Dataset):
         # treat each sample and corresponding label as dictionary
         sample = {"image":image, "label":label}
 
+        # apply data transformation if defined 
         if self.transform:
             sample = self.transform(sample)
 
@@ -68,6 +67,7 @@ class CustomDataset(Dataset):
     You can import it and use the Label class in this method!
     """
     def shows(self, image, label):
+        """This routine support batch processing"""
         for idx in range(image.shape[0]):
             # Complete the implementation.
             # transform label from tensor into PIL image, to recover integer value of label
@@ -96,12 +96,13 @@ class CustomDataset(Dataset):
             #print(type(image_), image_.shape)
             #print(type(label_), label_.shape)
             #print(torch.tensor(label_).shape)
-            fname = uuid1()
+            fname = uuid1() # generate string based on host and current time
             plt.imsave(arr=image_, fname=os.path.join(output_dir, f"{fname}.png"))
             plt.imsave(arr=label_, fname=os.path.join(output_dir, f"{fname}_label.png"))
 
     @classmethod
     def populate_dataset(cls, root) -> list:
+        """Populate path of all images and corresponding labels in the datasets"""
         image_list = []
         label_list = []
         for dirname, _, filenames in os.walk(os.path.join(root, "images")):
@@ -145,6 +146,7 @@ class CustomRandomCrop(object):
 class CustomRandomHorizontalFlip(object):
     """Random Horizontal Flip transformation: using PyTorch implementation"""
     def __init__(self, p=1.0) -> None:
+        # p should be float between 0 and 1
         assert isinstance(p, float)
         assert p > 0 and p <= 1
         self.p = p
@@ -194,6 +196,8 @@ class Denormalize(object):
     def __init__(self, 
         mean=(-0.485/0.229, -0.456/0.224, -0.406/0.225), 
         std=(1/0.229, 1/0.224, 1/0.225)) -> None:
+        # this default paramter calculated by inverting 
+        # normalization equation y = (x - mean) / std
         assert isinstance(mean, tuple) and isinstance(std, tuple)
         assert len(mean) == 3 and len(std) == 3
         self.mean = mean
@@ -208,13 +212,14 @@ class Denormalize(object):
         return img_trans
 
 
+"""This function is only for debugging"""
 def show_colored_label(sample):
     # convert sample to numpy array object
     sample = np.asarray(sample)
     colorized_label = Labels.colorize(sample)
     plt.imshow(colorized_label)
 
-
+"""This function is only for debugging"""
 def test_script():
     # Create CustomDataset object
     dataset = CustomDataset()
@@ -283,6 +288,7 @@ if __name__ == "__main__":
         norm
     ])
     transformed_dataset = CustomDataset(transform=comb)
+    # set mini-batch size of 2, so for 5 images, there is 3 mini-batches, i.e. 2, 2, 1 
     dataloader = DataLoader(transformed_dataset, batch_size=2, shuffle=True)
 
     # iterate through dataloader
