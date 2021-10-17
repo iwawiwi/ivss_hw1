@@ -55,7 +55,7 @@ class CustomDataset(Dataset):
         # load label
         lbl_name = self.labels[index]
         label = imread(lbl_name)
-        # treat each sample and corresponding label as dictioary
+        # treat each sample and corresponding label as dictionary
         sample = {"image":image, "label":label}
 
         if self.transform:
@@ -152,7 +152,7 @@ class CustomRandomHorizontalFlip(object):
     def __call__(self, sample) -> dict:
         """Return transformed image and corresponding transformed label"""
         image, label = sample["image"], sample["label"]
-        trans = transforms.RandomHorizontalFlip(p=1)
+        trans = transforms.RandomHorizontalFlip(self.p)
         img_trans = trans(image)
         lbl_trans = trans(label)
 
